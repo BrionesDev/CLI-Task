@@ -1,9 +1,23 @@
 "use strict";
 import readline from "readline";
 import fs, { write } from "fs";
-import { log } from "console";
+import { table } from "console";
 
 const rl = readline.createInterface({input: process.stdin, output: process.stdout});
+const COMMAND_LIST = Object.freeze({
+    add: "add",
+    update: "update",
+    delete: "delete",
+    markTodo: "mark-todo",
+    markInProgress: "mark-in-progress",
+    markDone: "mark-done",
+    list: "list",
+    listDone: "list done",
+    listTodo: "list todo",
+    listInProgress: "list in-progress",
+    exit: "exit"
+});
+    
 
 const mainMenu = () => {
     rl.question(`\n= = = = = = = = = = = = = = = CLI TASK MANAGER = = = = = = = = = = = = = = =\n
@@ -37,14 +51,14 @@ const addTask = (...description) => {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
     };
-    
+
     tasks.push(newTask);
     writeTasks(tasks);
     mainMenu();
 };
 
 const updateTask = (taskId, ...args) => {
-    let tasks = readTasks();
+    const tasks = readTasks();
     const task = findTaskById(tasks, taskId);
 
     if (!task) return mainMenu();
@@ -62,7 +76,7 @@ const updateTask = (taskId, ...args) => {
 
 const deleteTask = (taskId) => {
     let tasks = readTasks();
-    const taskIndex = tasks.findIndex(t => t.id === taskId);
+    const taskIndex = tasks.findIndex(task => task.id === taskId);
 
     if (taskIndex === -1) {
         console.error(`\nTask with ID ${taskId} not found.`);
@@ -77,35 +91,38 @@ const deleteTask = (taskId) => {
     mainMenu();
 };
 
-const markAsTodo = (taskId) => {};
+const handleMark = (command, taskId) => {
+    const tasks = readTasks();
+    const task = findTaskById(tasks, taskId);
 
-const markAsInProgress = (taskId) => {};
+    if (!task) return mainMenu();
 
-const markAsDone = (taskId) => {};
+    task.status = command.replace("mark-", "");
+    task.updatedAt = new Date().toISOString();
 
-const listAllTasks = () => {
-    try {
-        const tasks = readTasks();
+    writeTasks(tasks);
+    console.log(`\nTask with ID ${taskId} marked as ${task.status}.`);
+    mainMenu();
+};
 
-        if (!tasks.length) {
-            console.warn("\n= = = = = NO TASKS FOUND! = = = = =\n");
-            return mainMenu();
-        }
+const handleList = (status) => {
+    const tasks = readTasks();
+
+    if (!status) {
         console.log("\n= = = = = ALL YOUR TASKS = = = = =");
         tasks.forEach(task => console.table([task]));
-        } catch (err) {
-            console.error(err.message);
-        }
         return mainMenu();
-};
+    }
 
-const listDoneTasks = () => {
-};
+    const filteredTasks = tasks.filter(task => task.status === status);
 
-const listToDoTasks = () => {
-};
-
-const listInProgressTasks = () => {
+    if (!filteredTasks.length) {
+        console.warn(`\n= = = = = NO ${status.toUpperCase()} TASKS FOUND! = = = = =\n`);
+        return mainMenu();
+    }
+    console.log(`\n= = = = = ALL YOUR ${status.toUpperCase()} TASKS = = = = =`);
+    filteredTasks.forEach(task => console.table([task]));
+    mainMenu();
 };
 
 const exit = () => {
@@ -117,36 +134,40 @@ const exit = () => {
 const handleUserInput = (input) => {
     const [command, ...commandArgs] = input.trim().split(" ");
 
-    if (commandArgs.length === 0 && (command === "list" || command === "exit")) return actions[command]();
+    if ((command === COMMAND_LIST.list || command === COMMAND_LIST.exit) && !commandArgs.length) return actions[command]();
 
-    if (commandArgs.length === 1 && command === "list") return actions[command + " " + commandArgs]();
-
-    if (command === "delete" || command.includes("mark")) {
-        if (!hasArgs(commandArgs)) return mainMenu();
-
+    if ([COMMAND_LIST.listDone, COMMAND_LIST.listTodo, COMMAND_LIST.listInProgress].includes(command + " " + commandArgs)) {
         return actions[command](commandArgs[0]);
     }
 
-    if (command === "add") {
-        if (!hasArgs(commandArgs)) return mainMenu();
-
-        if (!hasQuotes(commandArgs)) return mainMenu();
+    if (command === COMMAND_LIST.add) {
+        if (!hasArgs(commandArgs) || !hasQuotes(commandArgs)) return mainMenu();
 
         return actions[command](...commandArgs);
     }
 
-    if (command === "update") {
+    if (command === COMMAND_LIST.update) {
         const [taskId, ...description] = commandArgs;
 
-        if (!hasArgs(commandArgs)) return mainMenu();
-
-        if (!hasQuotes(description)) return mainMenu();
+        if (!hasArgs(commandArgs) || !hasQuotes(description)) return mainMenu();
 
         return actions[command](taskId, ...description);
     }
 
-    console.error(`Invalid command: (${command}). Please try again.`);
-    return mainMenu();
+    if (command === COMMAND_LIST.delete) {
+        if (!hasArgs(commandArgs)) return mainMenu();
+        
+        return actions[command](commandArgs[0]);
+    }
+
+    if ([COMMAND_LIST.markTodo, COMMAND_LIST.markInProgress, COMMAND_LIST.markDone].includes(command)) {
+        if (!hasArgs(commandArgs)) return mainMenu();
+
+        return actions[command](command, commandArgs[0]);
+    }
+
+    console.error(`\nInvalid command: (${command} ${commandArgs.join(" ")}). Please try again.`);
+    mainMenu();
 };
 
 const readTasks = () => {
@@ -216,13 +237,13 @@ const actions = {
     "add": addTask,
     "update": updateTask,
     "delete": deleteTask,
-    "mark-todo": markAsTodo,
-    "mark-in-progress": markAsInProgress,
-    "mark-done": markAsDone,
-    "list": listAllTasks,
-    "list done": listDoneTasks,
-    "list todo": listToDoTasks,
-    "list in-progress": listInProgressTasks,
+    "mark-todo": handleMark,
+    "mark-in-progress": handleMark,
+    "mark-done": handleMark,
+    "list": handleList,
+    "list done": handleList,
+    "list todo": handleList,
+    "list in-progress": handleList,
     "exit": exit
 };
 
